@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using TicketManagementSystemAPI.Models;
+using TicketManagementSystemAPI.Repository;
 using TicketReport.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,7 +24,7 @@ builder.Services.AddScoped<PdfReportService>();
 builder.Services.AddDbContext<RohitContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-
+builder.Services.AddScoped<ITicketRepository, TicketRepository>();
 // Configure JWT Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>

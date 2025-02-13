@@ -1,10 +1,10 @@
-﻿using System.Data;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using TicketManagementSystemAPI.Models;
+﻿using TicketManagementSystemAPI.Models;
 using TicketReport.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using TicketManagementSystemAPI.Repository;
 
 namespace TicketManagementSystemAPI.Controllers
 {
@@ -12,28 +12,33 @@ namespace TicketManagementSystemAPI.Controllers
     [ApiController]
     public class TicketsController : ControllerBase
     {
-        private readonly RohitContext _context;
+        private readonly ITicketRepository _ticketRepository;
         private readonly PdfReportService _pdfReportService;
 
-        public TicketsController(RohitContext context, PdfReportService pdfReportServices)
+        public TicketsController(ITicketRepository ticketRepository, PdfReportService pdfReportService)
         {
-            _context = context;
-            _pdfReportService = pdfReportServices;
+            _ticketRepository = ticketRepository;
+            _pdfReportService = pdfReportService;
         }
 
         [Authorize(Roles = "User")]
         [HttpPost]
         public async Task<ActionResult<Ticket>> PostTicket(Ticket ticket)
         {
-            if (ticket == null)
+            try
             {
-                return BadRequest();
+                if (ticket == null)
+                {
+                    return BadRequest();
+                }
+
+                await _ticketRepository.AddAsync(ticket);
+                return CreatedAtAction("GetTicket", new { id = ticket.Id }, ticket);
             }
-
-            _context.Tickets.Add(ticket);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetTicket", new { id = ticket.Id }, ticket);
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+            }
         }
 
         [Authorize(Roles = "User,Admin")]
@@ -42,16 +47,14 @@ namespace TicketManagementSystemAPI.Controllers
         {
             try
             {
-                var ticket = await _context.Tickets.FirstOrDefaultAsync(t => t.Id == id);
+                var ticket = await _ticketRepository.GetByIdAsync(id);
                 if (ticket == null) return NotFound();
                 return ticket;
             }
             catch (Exception ex)
             {
-
-                throw ex;
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
             }
-            
         }
 
         [Authorize(Roles = "User,Admin")]
@@ -61,13 +64,13 @@ namespace TicketManagementSystemAPI.Controllers
             try
             {
                 if (id != updatedTicket.Id) return BadRequest();
-                _context.Entry(updatedTicket).State = EntityState.Modified;
-                await _context.SaveChangesAsync();
+
+                await _ticketRepository.UpdateAsync(updatedTicket);
                 return Ok("Ticket Updated Successfully");
             }
             catch (Exception ex)
             {
-                throw ex;
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
             }
         }
 
@@ -77,15 +80,13 @@ namespace TicketManagementSystemAPI.Controllers
         {
             try
             {
-                var data = await _context.Tickets.ToListAsync();
-                return data;
+                var data = await _ticketRepository.GetAllAsync();
+                return Ok(data);
             }
             catch (Exception ex)
             {
-                throw ex;
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
             }
-            
-  
         }
 
         [Authorize(Roles = "Admin")]
@@ -94,17 +95,14 @@ namespace TicketManagementSystemAPI.Controllers
         {
             try
             {
-                var data = await _context.Tickets.ToListAsync();
+                List<Ticket> data = (List<Ticket>)await _ticketRepository.GetResolvedTicketsAsync();
                 var pdfBytes = await _pdfReportService.GenerateResolvedTicketsReportAsync(data);
                 return File(pdfBytes, "application/pdf", "ResolvedTicketsReport.pdf");
             }
             catch (Exception ex)
             {
-
-                throw ex;
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
             }
-           
-            
         }
     }
 }
